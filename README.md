@@ -217,3 +217,4 @@ scripts/
 становится подстраховкой.
 # Yandex-autodelivey-bot
 # Yandex-autodelivey-bot
+# Yandex-autodelivey-bot
