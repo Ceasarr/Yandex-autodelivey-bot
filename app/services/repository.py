@@ -181,6 +181,54 @@ async def delete_key_by_code(
         return "deleted", True
 
 
+@dataclass
+class DeleteKeysResult:
+    deleted: list[str]              # коды, которые удалили
+    not_found: list[str]            # кодов нет у этого SKU
+    not_available: list[tuple[str, str]]  # (код, статус) — найден, но не свободен
+
+
+async def delete_keys_by_codes(
+    product_id: int, codes: list[str]
+) -> DeleteKeysResult:
+    """Удаляет несколько ключей товара по их кодам за один проход.
+
+    Удаляются только свободные (AVAILABLE) ключи. Выданные/зарезервированные
+    не трогаем, чтобы не терять историю выдачи покупателю. Дубликаты во вводе
+    схлопываются, порядок сохраняется.
+    """
+    # Уникализируем, сохраняя порядок
+    seen: set[str] = set()
+    wanted: list[str] = []
+    for raw in codes:
+        c = raw.strip()
+        if c and c not in seen:
+            seen.add(c)
+            wanted.append(c)
+
+    result = DeleteKeysResult(deleted=[], not_found=[], not_available=[])
+    if not wanted:
+        return result
+
+    async with get_session() as session:
+        rows = (await session.execute(
+            select(Key).where(Key.product_id == product_id, Key.code.in_(wanted))
+        )).scalars().all()
+        by_code = {k.code: k for k in rows}
+        for code in wanted:
+            key = by_code.get(code)
+            if key is None:
+                result.not_found.append(code)
+            elif key.status != KeyStatus.AVAILABLE:
+                result.not_available.append((code, key.status.value))
+            else:
+                await session.delete(key)
+                result.deleted.append(code)
+        if result.deleted:
+            await session.commit()
+    return result
+
+
 async def add_keys(product_id: int, codes: list[str]) -> tuple[int, int]:
     """Добавляет ключи в пул товара.
 

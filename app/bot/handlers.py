@@ -868,8 +868,9 @@ async def delkey_pick_product(call: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(DeleteKey.entering_code)
     await call.message.answer(
         f"SKU <code>{_esc(product.offer_id)}</code>.\n"
-        "Пришлите код ключа, который нужно удалить (одной строкой).\n\n"
-        "Удалить можно только свободный (ещё не выданный) ключ.\n"
+        "Пришлите коды ключей для удаления — по одному в строке "
+        "(можно один или несколько).\n\n"
+        "Удалить можно только свободные (ещё не выданные) ключи.\n"
         "Для отмены — «✖️ Отмена».",
         reply_markup=kb.cancel_keyboard(),
     )
@@ -878,10 +879,10 @@ async def delkey_pick_product(call: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(DeleteKey.entering_code, F.text)
 async def delkey_enter_code(message: Message, state: FSMContext) -> None:
-    code = (message.text or "").strip()
-    if not code or "\n" in code:
+    codes = [line.strip() for line in (message.text or "").splitlines() if line.strip()]
+    if not codes:
         await message.answer(
-            "Нужен один код одной строкой. Пришлите код или нажмите «✖️ Отмена»."
+            "Не вижу кодов. Пришлите ключи по одному в строке или нажмите «✖️ Отмена»."
         )
         return
     data = await state.get_data()
@@ -893,32 +894,37 @@ async def delkey_enter_code(message: Message, state: FSMContext) -> None:
             "Что-то пошло не так — начните заново.", reply_markup=kb.main_menu()
         )
         return
-    result = await repo.delete_key_by_code(product_id, code)
+    result = await repo.delete_keys_by_codes(product_id, codes)
     await state.clear()
-    if result is None:
-        await message.answer(
-            f"Ключ <code>{_esc(code)}</code> не найден среди ключей SKU "
-            f"<code>{_esc(offer_id)}</code>.",
-            reply_markup=kb.main_menu(),
-        )
-        return
-    status, deleted = result
-    if deleted:
-        await message.answer(
-            f"🔑 Ключ <code>{_esc(code)}</code> удалён из SKU "
-            f"<code>{_esc(offer_id)}</code>.",
-            reply_markup=kb.main_menu(),
-        )
-    else:
-        await message.answer(
-            f"Ключ <code>{_esc(code)}</code> найден, но его нельзя удалить: "
-            f"статус {status} (не свободен). Удаляются только свободные ключи.",
-            reply_markup=kb.main_menu(),
-        )
+
+    lines = [f"SKU <code>{_esc(offer_id)}</code>"]
+    if result.deleted:
+        lines.append(f"\n🔑 Удалено: {len(result.deleted)}")
+        for c in result.deleted:
+            lines.append(f"  ✅ <code>{_esc(c)}</code>")
+    if result.not_available:
+        lines.append(f"\n⚠️ Не свободны (пропущены): {len(result.not_available)}")
+        for c, status in result.not_available:
+            lines.append(f"  • <code>{_esc(c)}</code> — статус {status}")
+    if result.not_found:
+        lines.append(f"\n❓ Не найдены у этого SKU: {len(result.not_found)}")
+        for c in result.not_found:
+            lines.append(f"  • <code>{_esc(c)}</code>")
+    if not result.deleted and not result.not_available and not result.not_found:
+        lines.append("\nНичего не удалено.")
+
+    # Бьём на части, чтобы не упереться в лимит длины сообщения Telegram
+    chunk: list[str] = []
+    for ln in lines:
+        chunk.append(ln)
+        if len(chunk) >= _KEYS_PER_MESSAGE:
+            await message.answer("\n".join(chunk))
+            chunk = []
+    await message.answer("\n".join(chunk), reply_markup=kb.main_menu())
 
 
 @router.message(DeleteKey.entering_code)
 async def delkey_enter_code_wrong_type(message: Message) -> None:
     await message.answer(
-        "Нужен код текстом. Пришлите код ключа или нажмите «✖️ Отмена»."
+        "Нужны коды текстом — по одному в строке. Пришлите ключи или нажмите «✖️ Отмена»."
     )
