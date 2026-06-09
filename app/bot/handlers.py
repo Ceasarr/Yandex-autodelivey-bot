@@ -314,7 +314,7 @@ async def _send_order_keys(message: Message, market_order_id: int) -> None:
             chunk = g.codes[start:start + _KEYS_PER_MESSAGE]
             body = "\n".join(f"<code>{_esc(c)}</code>" for c in chunk)
             head = label if start == 0 else f"{label} (продолжение)"
-            await message.answer(f"{head} ×{len(g.codes)}\n{body}")
+            await message.answer(f"{head} ×{len(chunk)}\n{body}")
 
 
 @router.callback_query(F.data.startswith("showkeys:"))
@@ -800,9 +800,6 @@ async def export_pick_product(call: CallbackQuery, state: FSMContext) -> None:
         ),
     )
     await call.message.answer("Готово.", reply_markup=kb.main_menu())
-
-
-# ---- Удаление одного ключа по коду (FSM) ----
 
 @router.message(F.text == "🔑 Удалить ключ")
 async def delkey_start(message: Message, state: FSMContext) -> None:
