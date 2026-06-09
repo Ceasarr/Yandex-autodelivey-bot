@@ -20,11 +20,5 @@ COPY scripts ./scripts
 # Каталог для SQLite-базы (монтируется томом, см. docker-compose.yml)
 RUN mkdir -p /app/data
 
-# Запуск без root
-RUN useradd --create-home --uid 10001 appuser \
-    && chown -R appuser:appuser /app
-USER appuser
-
-# Дымовая проверка как healthcheck-ориентир (в сеть не ходит)
-# Запуск сервиса
+# Запуск от root (том data монтируется с хоста с правами пользователя)
 CMD ["python", "-m", "app.main"]
