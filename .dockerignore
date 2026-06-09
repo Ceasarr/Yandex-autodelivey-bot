@@ -1,0 +1,27 @@
+# Исключаем из контекста сборки лишнее
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Секреты и данные не должны попадать в образ
+.env
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Git и IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Документация и сам Docker-контекст
+README.md
+Dockerfile
+.dockerignore
+docker-compose.yml
