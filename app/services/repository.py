@@ -153,36 +153,7 @@ async def delete_product(product_id: int) -> tuple[str, int] | None:
         return offer_id, int(keys_count)
 
 
-async def delete_key_by_code(
-    product_id: int, code: str
-) -> tuple[str, bool] | None:
-    """Удаляет один ключ товара по его коду.
-
-    Удаляются только свободные (AVAILABLE) ключи. Выданные/зарезервированные
-    не трогаем, чтобы не терять историю выдачи покупателю.
-
-    Возвращает:
-      ("deleted", True)        — ключ удалён;
-      (статус, False)          — ключ найден, но не свободен (его статус);
-      None                     — ключа с таким кодом у товара нет.
-    """
-    code = code.strip()
-    async with get_session() as session:
-        res = await session.execute(
-            select(Key).where(Key.product_id == product_id, Key.code == code)
-        )
-        key = res.scalar_one_or_none()
-        if key is None:
-            return None
-        if key.status != KeyStatus.AVAILABLE:
-            return key.status.value, False
-        await session.delete(key)
-        await session.commit()
-        return "deleted", True
-
-
-@dataclass
-class DeleteKeysResult:
+async def add_keys
     deleted: list[str]              # коды, которые удалили
     not_found: list[str]            # кодов нет у этого SKU
     not_available: list[tuple[str, str]]  # (код, статус) — найден, но не свободен

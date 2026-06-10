@@ -116,18 +116,20 @@ class MarketClient:
                         # Превышение лимита запросов — ждём и повторяем
                         if resp.status == 420:
                             delay = _backoff_delay(attempt)
+                            remaining = _MAX_RETRIES - attempt
                             logger.warning(
-                                "Лимит запросов (420) на %s, повтор через %.1fs",
-                                path, delay,
+                                "Лимит запросов (420) на %s, повтор через %.1fs (осталось попыток: %d)",
+                                path, delay, remaining,
                             )
                             await asyncio.sleep(delay)
                             continue
                         # Временная ошибка сервера — повтор
                         if resp.status >= 500:
                             delay = _backoff_delay(attempt)
+                            remaining = _MAX_RETRIES - attempt
                             logger.warning(
-                                "Ошибка сервера %s на %s, повтор через %.1fs",
-                                resp.status, path, delay,
+                                "Ошибка сервера %s на %s, повтор через %.1fs (осталось попыток: %d)",
+                                resp.status, path, delay, remaining,
                             )
                             await asyncio.sleep(delay)
                             continue
@@ -144,7 +146,7 @@ class MarketClient:
 
         if last_exc is not None:
             raise MarketApiError(0, f"Сеть недоступна: {last_exc}")
-        raise MarketApiError(429, "Исчерпаны попытки запроса (лимиты/5xx)")
+        raise MarketApiError(429, f"Исчерпаны попытки ({_MAX_RETRIES} из {_MAX_RETRIES}), все ответы — API-ошибки")
 
     # ---- Методы API ----
 
