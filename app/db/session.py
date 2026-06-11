@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy import event
+from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -17,13 +18,24 @@ from app.db.models import Base
 
 # Гарантируем, что директория для файла SQLite существует
 if settings.database_url.startswith("sqlite"):
-    # sqlite+aiosqlite:///./data/service.db -> ./data/service.db
-    db_path = settings.database_url.split(":///", 1)[-1]
-    db_dir = os.path.dirname(db_path)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
+    # sqlite+aiosqlite:///./data/service.db  -> ./data/service.db
+    # sqlite+aiosqlite:////app/data/service.db -> /app/data/service.db
+    # Четыре слэша = абсолютный путь: ////app/data -> /app/data
+    # Три слэша = относительный:       ///./data   -> ./data
+    raw = settings.database_url.split("sqlite+aiosqlite:///", 1)[-1]
+    db_path = "/" + raw if settings.database_url.startswith("sqlite+aiosqlite:////") else raw
+    os.makedirs(os.path.dirname(os.path.abspath(db_path)) or ".", exist_ok=True)
 
-engine = create_async_engine(settings.database_url, echo=False, future=True)
+engine = create_async_engine(
+    settings.database_url,
+    echo=False,
+    future=True,
+    # NullPool: каждая сессия открывает/закрывает соединение сама.
+    # Устраняет "unable to open database file" при долгой работе —
+    # пул не хранит соединения между запросами, поэтому протухших
+    # соединений и зависших потоков aiosqlite не возникает.
+    poolclass=NullPool,
+)
 
 
 # SQLite по умолчанию работает в режиме rollback-журнала: пишущая транзакция

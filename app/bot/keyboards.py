@@ -147,6 +147,29 @@ def sku_picker_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def upload_sku_picker_keyboard(
+    products: list[tuple[int, str, str | None]]
+) -> InlineKeyboardMarkup:
+    """Выбор существующего SKU при загрузке ключей + кнопка нового товара.
+
+    products: список (product_id, offer_id, title).
+    callback_data: 'upl_pick:<product_id>' или 'upl_new'.
+    """
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{offer_id}" + (f" — {title}" if title else ""),
+                callback_data=f"upl_pick:{product_id}",
+            )
+        ]
+        for product_id, offer_id, title in products
+    ]
+    rows.append(
+        [InlineKeyboardButton(text="➕ Добавить новый товар", callback_data="upl_new")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def slip_edit_keyboard(product_id: int) -> InlineKeyboardMarkup:
     """Действия над инструкцией товара: изменить / очистить.
 

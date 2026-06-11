@@ -54,6 +54,7 @@ def _esc(text: str) -> str:
 
 class UploadKeys(StatesGroup):
     choosing_shop = State()
+    choosing_or_creating_product = State()  # выбор существующего SKU или ввод нового
     entering_offer = State()
     entering_keys = State()
 
@@ -361,13 +362,8 @@ async def upload_start(message: Message, state: FSMContext) -> None:
         await message.answer("Сначала подключите магазины (запустите поллер).")
         return
     await state.set_state(UploadKeys.choosing_shop)
-    await message.answer(
-        "Можно прервать в любой момент кнопкой ниже.",
-        reply_markup=kb.cancel_keyboard(),
-    )
-    await message.answer(
-        "Выберите магазин:", reply_markup=kb.shops_keyboard(shops, "upl_shop")
-    )
+    await message.answer("Можно прервать в любой момент кнопкой ниже.", reply_markup=kb.cancel_keyboard())
+    await message.answer("Выберите магазин:", reply_markup=kb.shops_keyboard(shops, "upl_shop"))
 
 
 @router.callback_query(UploadKeys.choosing_shop, F.data.startswith("upl_shop:"))
@@ -378,10 +374,57 @@ async def upload_choose_shop(call: CallbackQuery, state: FSMContext) -> None:
         await call.answer("Магазин не найден", show_alert=True)
         return
     await state.update_data(shop_id=shop.id, shop_name=shop.name)
+    await call.answer()
+    await _show_upload_sku_picker(call.message, state, shop.id, shop.name)
+
+
+async def _show_upload_sku_picker(
+    message: Message, state: FSMContext, shop_id: int, shop_name: str
+) -> None:
+    """Показывает список существующих SKU магазина + кнопку нового товара."""
+    products = await repo.list_products(shop_id)
+    await state.set_state(UploadKeys.choosing_or_creating_product)
+    if products:
+        rows = [(p.id, p.offer_id, p.title) for p, _avail, _total in products]
+        await message.answer(
+            f"Магазин: {_esc(shop_name)}\n"
+            "Выберите SKU для добавления ключей или нажмите «➕ Добавить новый товар»:",
+            reply_markup=kb.upload_sku_picker_keyboard(rows),
+        )
+    else:
+        # SKU ещё нет — сразу переходим к вводу offer_id
+        await state.set_state(UploadKeys.entering_offer)
+        await message.answer(
+            f"Магазин: {_esc(shop_name)}\n"
+            "Введите <b>offer_id</b> товара (SKU продавца), к которому добавляем ключи:"
+        )
+
+
+@router.callback_query(UploadKeys.choosing_or_creating_product, F.data.startswith("upl_pick:"))
+async def upload_pick_existing_product(call: CallbackQuery, state: FSMContext) -> None:
+    try:
+        product_id = int(call.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await call.answer("Некорректный товар", show_alert=True)
+        return
+    product = await repo.get_product_by_id(product_id)
+    if product is None:
+        await call.answer("Товар не найден", show_alert=True)
+        return
+    await state.update_data(offer_id=product.offer_id, product_id=product.id)
+    await state.set_state(UploadKeys.entering_keys)
+    await call.message.answer(
+        f"Товар <code>{_esc(product.offer_id)}</code> выбран.\n"
+        "Отправьте ключи — по одному в строке (текстом) или файлом .txt."
+    )
+    await call.answer()
+
+
+@router.callback_query(UploadKeys.choosing_or_creating_product, F.data == "upl_new")
+async def upload_new_product(call: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(UploadKeys.entering_offer)
     await call.message.answer(
-        f"Магазин: {_esc(shop.name)}\n"
-        "Введите <b>offer_id</b> товара (SKU продавца), к которому добавляем ключи:"
+        "Введите <b>offer_id</b> нового товара (SKU продавца):"
     )
     await call.answer()
 
