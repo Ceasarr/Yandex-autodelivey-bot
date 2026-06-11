@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     shop2_api_key: str = Field(default="", alias="SHOP2_API_KEY")
     shop2_business_id: int = Field(default=0, alias="SHOP2_BUSINESS_ID")
     shop2_campaign_id: int = Field(default=0, alias="SHOP2_CAMPAIGN_ID")
+
+    @field_validator("shop1_business_id", "shop1_campaign_id",
+                     "shop2_business_id", "shop2_campaign_id", mode="before")
+    @classmethod
+    def _empty_str_to_zero(cls, v: object) -> object:
+        if v == "":
+            return 0
+        return v
 
     # Поллер
     poll_interval_seconds: int = Field(default=45, alias="POLL_INTERVAL_SECONDS")
