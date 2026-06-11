@@ -153,10 +153,11 @@ async def delete_product(product_id: int) -> tuple[str, int] | None:
         return offer_id, int(keys_count)
 
 
-async def add_keys
-    deleted: list[str]              # коды, которые удалили
-    not_found: list[str]            # кодов нет у этого SKU
-    not_available: list[tuple[str, str]]  # (код, статус) — найден, но не свободен
+@dataclass
+class DeleteKeysResult:
+    deleted: list[str]
+    not_found: list[str]
+    not_available: list[tuple[str, str]]  # (код, статус)
 
 
 async def delete_keys_by_codes(
